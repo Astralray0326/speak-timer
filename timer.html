@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Speaking Timer</title>
+  <style>
+    body{font-family:-apple-system,sans-serif;max-width:500px;margin:40px auto;padding:20px;background:#f7f9fc;color:#1e293b}
+    .card{background:white;border-radius:20px;padding:24px;box-shadow:0 4px 12px rgba(0,0,0,0.06);text-align:center}
+    button{background:#2563eb;color:white;border:none;font-size:18px;padding:14px;border-radius:50px;width:100%;margin:8px 0;font-weight:600}
+    button:active{background:#1d4ed8} button:disabled{background:#94a3b8}
+    .timer{font-size:36px;font-weight:700;margin:16px 0}
+    .result-box{background:#f1f5f9;border-radius:12px;padding:16px;min-height:80px;text-align:left;word-break:break-word}
+    .status{color:#64748b;font-size:14px;margin-bottom:8px}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2>🗣️ 英语口语计时与识别</h2>
+    <p class="status" id="status">点击按钮开始说话</p>
+    <div class="timer" id="timer">0.0 s</div>
+    <button id="startBtn">🎤 开始录音</button>
+    <button id="stopBtn" disabled>⏹️ 手动停止</button>
+    <div class="result-box" id="transcript">识别结果将显示在这里...</div>
+    <div id="info"></div>
+    <div style="background:#fef3c7;color:#92400e;padding:10px;border-radius:8px;font-size:13px;margin-top:16px">
+      ⚠️ 我真服了，国内html削的太狠了，到头来只有一个阉割版的计时器，不用电脑还是不行啊
+    </div>
+  </div>
+  <script>
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      document.getElementById('status').innerText = '❌ 浏览器不支持语音识别';
+      document.getElementById('startBtn').disabled = true;
+    } else {
+      let recognition, startTime, timerInterval, finalTranscript = '';
+      let speakingStartDetected = false;
+      function startRecognition() {
+        recognition = new SpeechRecognition();
+        recognition.lang = 'en-US';
+        recognition.interimResults = true;
+        recognition.continuous = false;
+        recognition.onstart = () => {
+          document.getElementById('status').innerText = '🎤 正在听...';
+          document.getElementById('startBtn').disabled = true;
+          document.getElementById('stopBtn').disabled = false;
+          startTime = Date.now();
+          timerInterval = setInterval(() => {
+            document.getElementById('timer').textContent = ((Date.now() - startTime)/1000).toFixed(1) + ' s';
+          }, 100);
+        };
+        recognition.onaudiostart = () => {
+          speakingStartDetected = true;
+          document.getElementById('status').innerText = '🔊 检测到语音';
+        };
+        recognition.onresult = (event) => {
+          let interim = '';
+          for (let i = event.resultIndex; i < event.results.length; i++) {
+            if (event.results[i].isFinal) finalTranscript += event.results[i][0].transcript + ' ';
+            else interim += event.results[i][0].transcript;
+          }
+          document.getElementById('transcript').innerText = finalTranscript + interim;
+        };
+        recognition.onerror = (e) => {
+          document.getElementById('status').innerText = '❌ 错误: ' + e.error;
+          resetUI();
+        };
+        recognition.onend = () => {
+          clearInterval(timerInterval);
+          const total = (Date.now() - startTime)/1000;
+          document.getElementById('timer').textContent = total.toFixed(1) + ' s';
+          if (!speakingStartDetected) document.getElementById('transcript').innerText = '（无语音输入）';
+          const words = finalTranscript.trim().split(/\s+/).filter(w=>w.length);
+          document.getElementById('info').innerHTML = '⏱️ 说话总用时：<b>' + total.toFixed(1) + ' 秒</b><br>🔤 单词数：<b>' + words.length + '</b>';
+          document.getElementById('status').innerText = '✅ 完成';
+          resetUI();
+          finalTranscript = '';
+        };
+        recognition.start();
+      }
+      function resetUI() {
+        document.getElementById('startBtn').disabled = false;
+        document.getElementById('stopBtn').disabled = true;
+        clearInterval(timerInterval);
+        startTime = null;
+        speakingStartDetected = false;
+      }
+      document.getElementById('startBtn').onclick = () => {
+        finalTranscript = '';
+        document.getElementById('transcript').innerText = '';
+        document.getElementById('info').innerHTML = '';
+        document.getElementById('timer').textContent = '0.0 s';
+        startRecognition();
+      };
+      document.getElementById('stopBtn').onclick = () => {
+        if (recognition) recognition.stop();
+        resetUI();
+      };
+    }
+  </script>
+</body>
+</html>
