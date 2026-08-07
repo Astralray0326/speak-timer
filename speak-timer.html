@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Speaking Timer</title>
+  <style>
+    body{font-family:-apple-system,sans-serif;max-width:500px;margin:40px auto;padding:20px;background:#f7f9fc;color:#1e293b}
+    .card{background:white;border-radius:20px;padding:24px;box-shadow:0 4px 12px rgba(0,0,0,0.06);text-align:center}
+    button{background:#2563eb;color:white;border:none;font-size:18px;padding:14px;border-radius:50px;width:100%;margin:8px 0;font-weight:600}
+    button:active{background:#1d4ed8} button:disabled{background:#94a3b8}
+    .timer{font-size:36px;font-weight:700;margin:16px 0}
+    .result-box{background:#f1f5f9;border-radius:12px;padding:16px;min-height:80px;text-align:left;word-break:break-word;white-space:pre-wrap}
+    .status{color:#64748b;font-size:14px;margin-bottom:8px}
+    .debug{background:#fef2f2;color:#991b1b;padding:10px;border-radius:8px;font-size:13px;margin-top:10px;display:none}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2>🗣️ 英语口语计时与识别</h2>
+    <p class="status" id="status">点击按钮开始说话</p>
+    <div class="timer" id="timer">0.0 s</div>
+    <button id="startBtn">🎤 开始录音</button>
+    <button id="stopBtn" disabled>⏹️ 手动停止</button>
+    <div class="result-box" id="transcript">识别结果将显示在这里...</div>
+    <div id="info"></div>
+    <div class="debug" id="debugBox"></div>
+    <div style="background:#fef3c7;color:#92400e;padding:10px;border-radius:8px;font-size:13px;margin-top:16px">
+      ⚠️ 微信内可能无法识别，请用系统浏览器打开【designed by Astralray】
+    </div>
+  </div>
+  <script>
+    const statusEl = document.getElementById('status');
+    const transcriptEl = document.getElementById('transcript');
+    const timerEl = document.getElementById('timer');
+    const infoEl = document.getElementById('info');
+    const debugEl = document.getElementById('debugBox');
+    const startBtn = document.getElementById('startBtn');
+    const stopBtn = document.getElementById('stopBtn');
+
+    // 检测支持
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      statusEl.innerText = '❌ 当前浏览器不支持语音识别';
+      startBtn.disabled = true;
+      debugEl.style.display = 'block';
+      debugEl.innerText = '【原因】浏览器缺少 SpeechRecognition API。请用 Chrome/Safari/Edge 等现代浏览器打开，并确保使用 HTTPS。';
+    }
+
+    let recognition;
+    let startTime;
+    let timerInterval;
+    let finalTranscript = '';
+    let speakingDetected = false;
+
+    function startRecognition() {
+      recognition = new SpeechRecognition();
+      recognition.lang = 'en-US';          // 必须说英语
+      recognition.interimResults = true;
+      recognition.continuous = false;      // 说完一段自动结束
+      recognition.maxAlternatives = 1;
+
+      recognition.onstart = () => {
+        statusEl.innerText = '🎤 正在录音，请说英语...';
+        startBtn.disabled = true;
+        stopBtn.disabled = false;
+        startTime = Date.now();
+        timerInterval = setInterval(() => {
+          timerEl.textContent = ((Date.now() - startTime) / 1000).toFixed(1) + ' s';
+        }, 100);
+      };
+
+      recognition.onaudiostart = () => {
+        speakingDetected = true;
+        statusEl.innerText = '🔊 检测到语音，识别中...';
+      };
+
+      recognition.onaudioend = () => {
+        statusEl.innerText = '🔇 语音结束，正在处理...';
+      };
+
+      recognition.onresult = (event) => {
+        let interim = '';
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const result = event.results[i];
+          if (result.isFinal) {
+            finalTranscript += result[0].transcript + ' ';
+          } else {
+            interim += result[0].transcript;
+          }
+        }
+        transcriptEl.innerText = finalTranscript + interim;
+      };
+
+      recognition.onerror = (event) => {
+        clearInterval(timerInterval);
+        startBtn.disabled = false;
+        stopBtn.disabled = true;
+        let msg = '错误: ' + event.error;
+        if (event.error === 'not-allowed') {
+          msg = '❌ 麦克风权限被拒绝，请在浏览器设置中允许麦克风访问';
+        } else if (event.error === 'no-speech') {
+          msg = '⚠️ 未检测到语音，请大声说英语';
+        } else if (event.error === 'audio-capture') {
+          msg = '⚠️ 无法找到麦克风设备';
+        } else if (event.error === 'network') {
+          msg = '⚠️ 网络连接错误（某些浏览器需联网识别）';
+        }
+        statusEl.innerText = msg;
+        debugEl.style.display = 'block';
+        debugEl.innerText = '【调试信息】' + msg;
+      };
+
+      recognition.onend = () => {
+        clearInterval(timerInterval);
+        const total = (Date.now() - startTime) / 1000;
+        timerEl.textContent = total.toFixed(1) + ' s';
+        if (!speakingDetected) {
+          transcriptEl.innerText = '（未检测到任何有效语音）';
+          statusEl.innerText = '⚠️ 无语音输入';
+        } else {
+          statusEl.innerText = '✅ 完成';
+          const words = finalTranscript.trim().split(/\s+/).filter(w => w.length);
+          infoEl.innerHTML = '⏱️ 说话总用时：<b>' + total.toFixed(1) + ' 秒</b><br>🔤 单词数：<b>' + words.length + '</b>';
+   
